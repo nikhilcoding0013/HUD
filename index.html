@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HUD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* ===================== THEME ===================== */
+:root{
+  --c:#45e3ff; --c2:rgba(69,227,255,.6); --c3:rgba(69,227,255,.22); --c4:rgba(69,227,255,.08);
+  --bg:#03070b; --panel:rgba(8,28,38,.55); --txt:#e3f8ff; --mut:#8fb3bf;
+  --amber:#ffb547; --green:#5dffb0; --red:#ff7a7a;
+  --mono:"JetBrains Mono","DejaVu Sans Mono",monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  color:var(--txt);font-family:Inter,system-ui,sans-serif;
+  background:
+    radial-gradient(ellipse at 20% 30%,rgba(30,110,140,.22),transparent 50%),
+    radial-gradient(ellipse at 75% 70%,rgba(20,70,95,.22),transparent 55%),var(--bg);
+  background-attachment:fixed;
+}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;background-image:
+  linear-gradient(rgba(69,227,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(69,227,255,.04) 1px,transparent 1px);
+  background-size:48px 48px}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0}
+a{color:inherit;text-decoration:none}
+
+/* ===================== LAYOUT ===================== */
+.top{position:relative;display:flex;justify-content:space-between;align-items:center;
+  padding:22px 60px 0;font-size:13px;letter-spacing:.28em;color:var(--c2)}
+.top b{color:var(--c);font-weight:600}
+.sync{display:flex;align-items:center;gap:14px}
+.status{display:flex;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;margin-right:10px;background:var(--mut)}
+.dot.ok{background:var(--green);box-shadow:0 0 10px var(--green)}
+.dot.busy{background:var(--c);box-shadow:0 0 10px var(--c)}
+.dot.warn{background:var(--amber);box-shadow:0 0 10px var(--amber)}
+.gear{width:32px;height:32px;border:1px solid var(--c3);display:grid;place-items:center;color:var(--c)}
+.gear:hover{border-color:var(--c)}
+
+.app{position:relative;display:grid;grid-template-columns:minmax(380px,500px) minmax(0,1fr);gap:40px;
+  padding:22px 60px 40px;height:calc(100vh - 44px);min-height:720px}
+.left,.right{display:flex;flex-direction:column;gap:30px;min-height:0}
+
+.panel{position:relative;background:var(--panel);border:1px solid var(--c3)}
+.panel:before,.panel:after{content:"";position:absolute;width:18px;height:18px;border:2px solid var(--c);pointer-events:none}
+.panel:before{top:-2px;left:-2px;border-right:0;border-bottom:0}
+.panel:after{bottom:-2px;right:-2px;border-left:0;border-top:0}
+.label{font-size:12px;letter-spacing:.32em;color:var(--c);font-weight:600;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.label span:last-child{color:var(--c2);letter-spacing:.16em;font-weight:500}
+
+/* ===================== CLOCK ===================== */
+#clock{display:flex;align-items:center;gap:26px;padding:30px 28px;flex:0 0 auto}
+#ring{flex:0 0 170px}
+.time{font-size:78px;font-weight:200;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.time small{font-size:24px;font-weight:600;color:var(--c);letter-spacing:.1em;margin-left:6px}
+.date{font-size:16px;letter-spacing:.32em;color:var(--c);margin-top:12px;font-weight:500}
+.weekof{font-size:12px;letter-spacing:.24em;color:var(--mut);margin-top:10px}
+
+/* ===================== TODAY ===================== */
+#today{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:24px 28px}
+.big{font-size:30px;font-weight:300;margin:16px 0 4px}
+.prog{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--mut);letter-spacing:.12em;margin-bottom:10px}
+.prog .bar{flex:1;height:5px;background:var(--c4);position:relative}
+.prog .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--c);box-shadow:0 0 8px var(--c);transition:width .3s}
+.todaylist{overflow-y:auto;flex:1 1 auto;min-height:0;margin-right:-10px;padding-right:10px}
+.empty{color:var(--mut);font-size:15px;padding:18px 0}
+
+/* ===================== TASKS (shared) ===================== */
+.task{display:flex;gap:16px;align-items:flex-start;padding:14px 0;border-top:1px solid rgba(69,227,255,.12);position:relative}
+.task:first-child{border-top:0}
+.cb{width:22px;height:22px;border:1.5px solid var(--c);flex:0 0 22px;margin-top:2px;display:grid;place-items:center;
+  font-size:14px;color:#02131a;font-weight:800;transition:background .15s}
+.cb:hover{box-shadow:0 0 8px rgba(69,227,255,.5)}
+.cb.on{background:var(--c);box-shadow:0 0 10px var(--c)}
+.body{flex:1;min-width:0}
+.t{font-size:18px;line-height:1.35;word-wrap:break-word;cursor:text}
+.done .t{color:var(--mut);text-decoration:line-through;text-decoration-color:rgba(143,179,191,.6)}
+.tag{display:inline-block;font:600 10.5px Inter;letter-spacing:.18em;padding:3px 8px;border:1px solid var(--c3);color:var(--c);margin-top:6px;text-transform:uppercase}
+.tag.carry{color:var(--amber);border-color:rgba(255,181,71,.4)}
+.x{position:absolute;right:0;top:12px;color:var(--mut);font-size:18px;opacity:0;padding:2px 6px}
+.task:hover .x,.wt:hover .x{opacity:.8}
+.x:hover{color:var(--red)}
+.addrow{margin-top:12px;display:flex;border:1px dashed var(--c3)}
+.addrow input{flex:1;background:transparent;border:0;outline:0;padding:13px 16px;font-size:15px}
+.addrow input::placeholder{color:var(--mut)}
+.addrow:focus-within{border-color:var(--c);border-style:solid}
+.edit{width:100%;background:rgba(3,12,18,.8);border:1px solid var(--c);outline:0;padding:6px 8px;font-size:inherit}
+
+/* ===================== LINKS ===================== */
+.links{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;flex:0 0 auto}
+.link{position:relative;height:118px;background:var(--panel);border:1px solid var(--c3);display:flex;align-items:center;gap:18px;padding:0 24px;transition:border-color .15s,background .15s}
+.link:before{content:"";position:absolute;left:-1px;top:-1px;width:14px;height:14px;border-top:2px solid var(--c);border-left:2px solid var(--c)}
+.link:hover{border-color:var(--c);background:rgba(20,70,90,.45)}
+.ico{width:54px;height:54px;border:1px solid var(--c2);border-radius:50%;display:grid;place-items:center;flex:0 0 54px;box-shadow:0 0 14px rgba(69,227,255,.18) inset;color:var(--c)}
+.link .n{font-size:20px;font-weight:600;letter-spacing:.02em}
+.link .s{font-size:12px;letter-spacing:.2em;color:var(--mut);margin-top:5px}
+.link .arr{position:absolute;right:18px;top:14px;color:var(--c2);font-size:14px}
+
+/* ===================== WEEK ===================== */
+#week{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding:22px}
+.cols{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px;margin-top:22px;flex:1;min-height:0}
+.col{border:1px solid rgba(69,227,255,.12);background:rgba(3,12,18,.35);padding:14px 12px;position:relative;display:flex;flex-direction:column;min-height:0}
+.col.past{opacity:.62}
+.col.past:hover{opacity:.9}
+.col.today{border-color:var(--c);background:rgba(20,70,90,.35);box-shadow:0 0 22px rgba(69,227,255,.18) inset,0 0 18px rgba(69,227,255,.12)}
+.col.over{border-color:var(--amber)}
+.dh{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:10px;border-bottom:1px solid rgba(69,227,255,.15);margin-bottom:4px}
+.dh b{font-size:13px;letter-spacing:.28em;color:var(--c);font-weight:600}
+.dh span{font:13px var(--mono);color:var(--mut)}
+.col.today .dh span{color:var(--txt)}
+.now{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--c);color:#02131a;font:700 10px Inter;letter-spacing:.25em;padding:4px 10px}
+.wlist{overflow-y:auto;flex:1;min-height:0}
+.wt{display:flex;gap:9px;align-items:flex-start;padding:9px 0;border-bottom:1px solid rgba(69,227,255,.07);font-size:13.5px;line-height:1.32;position:relative;cursor:grab}
+.wt .cb{width:15px;height:15px;flex:0 0 15px;font-size:10px;margin-top:1px}
+.wt .t{font-size:13.5px;cursor:text;padding-right:14px}
+.wt small{display:block;font:600 9.5px Inter;letter-spacing:.16em;color:var(--c2);margin-top:3px;text-transform:uppercase}
+.wt small.carry{color:var(--amber)}
+.wt .x{top:6px;font-size:14px;padding:0 2px}
+.wt.ghost{opacity:.55;cursor:default}
+.wt.ghost .t{cursor:default}
+.wt.dragging{opacity:.3}
+.wadd{margin-top:8px}
+.wadd button{color:var(--mut);font-size:13px;padding:4px 0}
+.wadd button:hover{color:var(--c)}
+.wadd input{width:100%;background:rgba(3,12,18,.8);border:1px solid var(--c);outline:0;padding:6px 8px;font-size:13px}
+.hint{font-size:11px;letter-spacing:.14em;color:var(--mut);margin-top:12px}
+
+/* ===================== SETTINGS ===================== */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;place-items:center;z-index:10;padding:16px}
+.modal.open{display:grid}
+.sheet{width:min(520px,100%);padding:28px}
+.sheet p{color:var(--mut);font-size:14px;line-height:1.5;margin:12px 0 18px}
+.field{display:block;margin-bottom:14px}
+.field span{display:block;font-size:11px;letter-spacing:.24em;color:var(--c2);margin-bottom:6px}
+.field input{width:100%;background:rgba(3,12,18,.8);border:1px solid var(--c3);outline:0;padding:10px 12px;font:14px var(--mono)}
+.field input:focus{border-color:var(--c)}
+.btns{display:flex;gap:12px;justify-content:flex-end;margin-top:8px}
+.btn{border:1px solid var(--c3);padding:10px 18px;font-size:12px;letter-spacing:.2em;color:var(--c)}
+.btn:hover{border-color:var(--c)}
+.btn.primary{background:var(--c);color:#02131a;font-weight:700;border-color:var(--c)}
+.err{color:var(--red);font-size:13px;min-height:18px}
+
+/* ===================== SMALLER SCREENS ===================== */
+@media (max-width:1400px){
+  .links{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .link{height:84px}
+}
+@media (max-width:1100px){
+  .top{padding:18px 16px 0;font-size:11px;letter-spacing:.18em}
+  .app{grid-template-columns:1fr;height:auto;min-height:0;padding:18px 16px 40px;gap:24px}
+  .left,.right{gap:24px}
+  #clock{padding:20px}
+  #ring{flex-basis:110px;width:110px;height:110px}
+  .time{font-size:56px}
+  #today{min-height:0}
+  .todaylist{overflow:visible}
+  .cols{grid-template-columns:1fr}
+  .col.past{display:none}
+  .wlist{overflow:visible}
+}
+@media (max-width:520px){
+  .links{grid-template-columns:1fr}
+  .date{font-size:13px;letter-spacing:.2em}
+}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div><b>HUD</b> // COMMAND CENTER</div>
+  <div class="sync">
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">LOCAL ONLY</span></div>
+    <button class="gear" id="gear" title="Sync settings" aria-label="Sync settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+</div>
+
+<main class="app">
+  <section class="left">
+    <div class="panel" id="clock">
+      <svg id="ring" width="170" height="170" viewBox="0 0 170 170"></svg>
+      <div>
+        <div class="time" id="time">--:--</div>
+        <div class="date" id="date"></div>
+        <div class="weekof" id="weekof"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="today">
+      <div class="label"><span>TODAY</span><span>FROM WEEK TRACKER</span></div>
+      <div class="big" id="todayName"></div>
+      <div class="prog"><span id="progText"></span><div class="bar"><i id="progBar"></i></div></div>
+      <div class="todaylist" id="todayList"></div>
+      <div class="addrow"><input id="todayAdd" placeholder="+ Add a task  (e.g. Calc 3: hw 14.2)"></div>
+    </div>
+  </section>
+
+  <section class="right">
+    <nav class="links" id="links"></nav>
+    <div class="panel" id="week">
+      <div class="label"><span>WEEK TRACKER</span><span>DOUBLE-CLICK TO EDIT · DRAG TO MOVE</span></div>
+      <div class="cols" id="cols"></div>
+    </div>
+  </section>
+</main>
+
+<div class="modal" id="modal">
+  <div class="panel sheet">
+    <div class="label"><span>SYNC SETTINGS</span><span>GITHUB GIST</span></div>
+    <p>Your token and Gist ID are saved only in this browser, never in the page code. Do this once on each device you use.</p>
+    <label class="field"><span>GIST TOKEN (gist scope only)</span><input id="fToken" type="password" autocomplete="off" spellcheck="false"></label>
+    <label class="field"><span>GIST ID (the long string in your hud.json gist URL)</span><input id="fGist" autocomplete="off" spellcheck="false"></label>
+    <div class="err" id="fErr"></div>
+    <div class="btns">
+      <button class="btn" id="fClear">DISCONNECT</button>
+      <button class="btn" id="fCancel">CANCEL</button>
+      <button class="btn primary" id="fSave">CONNECT</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===================== CONFIG: edit links here ===================== */
+const LINKS = [
+  { name: "Claude", sub: "NEW CHAT", url: "https://claude.ai/new", side: true,
+    icon: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>' },
+  { name: "Supplementals", sub: "GOOGLE DOC", url: "https://docs.google.com/document/d/1N8HMT1QqqZ6a9nQzH5kYy1duI52FVLyqNlCfs_GFgTk/edit?tab=t.kakplzzxqs6",
+    icon: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 15h6M9 18h4"/></svg>' },
+  { name: "Common App", sub: "DASHBOARD", url: "https://apply.commonapp.org/dashboard",
+    icon: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2.5 9 2.5 12 0v-5M22 9v5"/></svg>' },
+  { name: "Calc 3", sub: "CANVAS · ILLINOIS", url: "https://canvas.illinois.edu/",
+    icon: '<span style="font:italic 600 19px Inter">∂f</span>' },
+];
+
+/* ===================== DATES ===================== */
+const DOW = ["SUN","MON","TUE","WED","THU","FRI","SAT"];
+const DOW_LONG = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const MON = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const pad = n => String(n).padStart(2, "0");
+const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const dateOf = k => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const todayKey = () => keyOf(new Date());
+function weekDays(ref = new Date()) {
+  const start = addDays(new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()), -((ref.getDay() + 6) % 7));
+  return [...Array(7)].map((_, i) => addDays(start, i));
+}
+function shortLabel(k) {   // "FRI" within this week, otherwise "NOV 1"
+  const d = dateOf(k), wk = weekDays().map(keyOf);
+  return wk.includes(k) ? DOW[d.getDay()] : `${MON[d.getMonth()]} ${d.getDate()}`;
+}
+
+/* ===================== STATE ===================== */
+// state = { updated: ms, days: { "YYYY-MM-DD": [ {id, text, tag, done, carriedFrom?, movedTo?} ] } }
+const LS = { data: "hud.data", token: "hud.token", gist: "hud.gist" };
+function safeGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+function safeSet(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
+
+function normalize(s) {
+  s = s && typeof s === "object" ? s : {};
+  return { updated: Number(s.updated) || 0, days: s.days && typeof s.days === "object" ? s.days : {} };
+}
+let state = normalize(JSON.parse(safeGet(LS.data) || "{}"));
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+function touch() {           // call after every change
+  state.updated = Date.now();
+  safeSet(LS.data, JSON.stringify(state));
+  render();
+  schedulePush();
+}
+
+function parseInput(raw) {   // "Calc 3: homework 14.2" -> tag "Calc 3", text "homework 14.2"
+  const s = raw.trim();
+  const m = s.match(/^([^:]{1,20}):\s*(.+)$/);
+  return m ? { tag: m[1].trim(), text: m[2].trim() } : { tag: "", text: s };
+}
+function addTask(dayKey, raw) {
+  const p = parseInput(raw);
+  if (!p.text) return;
+  (state.days[dayKey] ||= []).push({ id: uid(), text: p.text, tag: p.tag, done: false });
+  touch();
+}
+function findTask(id) {
+  for (const [k, list] of Object.entries(state.days)) {
+    const i = list.findIndex(t => t.id === id);
+    if (i > -1) return { key: k, list, i, task: list[i] };
+  }
+  return null;
+}
+function toggleTask(id) { const f = findTask(id); if (f) { f.task.done = !f.task.done; touch(); } }
+function deleteTask(id) { const f = findTask(id); if (f) { f.list.splice(f.i, 1); touch(); } }
+function editTask(id, raw) {
+  const f = findTask(id); if (!f) return;
+  const p = parseInput(raw);
+  if (!p.text) { f.list.splice(f.i, 1); } else { f.task.text = p.text; f.task.tag = p.tag; }
+  touch();
+}
+function moveTask(id, toKey) {
+  const f = findTask(id); if (!f || f.key === toKey) return;
+  f.list.splice(f.i, 1);
+  delete f.task.movedTo;
+  (state.days[toKey] ||= []).push(f.task);
+  touch();
+}
+
+// Unfinished tasks from earlier days move to today; a dim "moved to" marker stays behind.
+function carryOver() {
+  const t = todayKey(); let changed = false;
+  for (const [k, list] of Object.entries(state.days)) {
+    if (k >= t) continue;
+    for (const task of list) {
+      if (!task.done && !task.movedTo) {
+        task.movedTo = t;
+        (state.days[t] ||= []).push({ id: uid(), text: task.text, tag: task.tag, done: false, carriedFrom: task.carriedFrom || k });
+        changed = true;
+      }
+    }
+  }
+  const cutoff = keyOf(addDays(new Date(), -28));      // forget days older than 4 weeks
+  for (const k of Object.keys(state.days)) if (k < cutoff) { delete state.days[k]; changed = true; }
+  if (changed) touch();
+}
+
+/* ===================== GIST SYNC ===================== */
+let pushTimer = null, pushing = false, lastSync = null;
+const cfg = () => ({ token: safeGet(LS.token), gist: safeGet(LS.gist) });
+const hasSync = () => { const c = cfg(); return !!(c.token && c.gist); };
+function setStatus(kind, text) {
+  document.getElementById("dot").className = "dot " + kind;
+  document.getElementById("statusText").textContent = text;
+}
+const clock12 = d => `${d.getHours() % 12 || 12}:${pad(d.getMinutes())} ${d.getHours() < 12 ? "AM" : "PM"}`;
+function syncedLabel() { setStatus("ok", `SYNCED · GIST · ${clock12(lastSync)}`); }
+
+async function gistFetch(method, body) {
+  const { token, gist } = cfg();
+  const r = await fetch(`https://api.github.com/gists/${encodeURIComponent(gist)}`, {
+    method, cache: "no-store",
+    headers: { Authorization: `token ${token}`, Accept: "application/vnd.github+json",
+               ...(body ? { "Content-Type": "application/json" } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!r.ok) throw new Error(r.status === 401 ? "Token rejected (401)" : r.status === 404 ? "Gist not found (404)" : `GitHub error ${r.status}`);
+  return r.json();
+}
+async function pull() {
+  if (!hasSync() || pushTimer || pushing) return;
+  setStatus("busy", "SYNCING…");
+  try {
+    const g = await gistFetch("GET");
+    const f = g.files && g.files["hud.json"];
+    let content = f ? f.content : "{}";
+    if (f && f.truncated) content = await (await fetch(f.raw_url, { cache: "no-store" })).text();
+    let remote = {};
+    try { remote = normalize(JSON.parse(content || "{}")); } catch { remote = normalize({}); }
+    if (remote.updated > state.updated) {          // newer on another device
+      state = remote; safeSet(LS.data, JSON.stringify(state)); render();
+    } else if (state.updated > remote.updated) {   // newer here (e.g. edited offline)
+      schedulePush(0); return;
+    }
+    lastSync = new Date(); syncedLabel();
+  } catch (e) { setStatus("warn", "OFFLINE · SAVED LOCALLY"); console.warn(e); }
+}
+function schedulePush(delay = 800) {
+  if (!hasSync()) { setStatus("", "LOCAL ONLY · SET UP SYNC"); return; }
+  clearTimeout(pushTimer);
+  setStatus("busy", "SAVING…");
+  pushTimer = setTimeout(push, delay);
+}
+async function push() {
+  pushTimer = null; pushing = true;
+  try {
+    await gistFetch("PATCH", { files: { "hud.json": { content: JSON.stringify(state, null, 1) } } });
+    lastSync = new Date(); syncedLabel();
+  } catch (e) { setStatus("warn", "OFFLINE · SAVED LOCALLY"); console.warn(e); }
+  pushing = false;
+}
+
+/* ===================== RENDER ===================== */
+function h(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null && v !== false) e.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k !== null && k !== undefined && k !== false) e.append(k);
+  return e;
+}
+function inlineEdit(span, task) {
+  const input = h("input", { class: "edit", value: task.tag ? `${task.tag}: ${task.text}` : task.text });
+  let done = false;
+  const finish = save => { if (done) return; done = true; save ? editTask(task.id, input.value) : render(); };
+  input.addEventListener("keydown", e => { if (e.key === "Enter") finish(true); if (e.key === "Escape") finish(false); });
+  input.addEventListener("blur", () => finish(true));
+  span.replaceWith(input); input.focus(); input.select();
+}
+function tagLine(task, Small) {
+  if (task.movedTo) return h(Small, { class: "carry" + (Small === "span" ? " tag" : "") }, `↺ MOVED TO ${shortLabel(task.movedTo)}`);
+  const bits = [];
+  if (task.tag) bits.push(h(Small, { class: Small === "span" ? "tag" : "" }, task.tag));
+  if (task.carriedFrom) bits.push(h(Small, { class: "carry" + (Small === "span" ? " tag" : ""), style: Small === "span" ? "margin-left:6px" : "" }, `↺ FROM ${shortLabel(task.carriedFrom)}`));
+  return bits;
+}
+
+function renderLinks() {
+  const nav = document.getElementById("links"); nav.replaceChildren();
+  for (const l of LINKS) {
+    const a = h("a", { class: "link", href: l.url, target: "_blank", rel: "noopener" },
+      h("span", { class: "arr" }, "↗"),
+      Object.assign(h("div", { class: "ico" }), { innerHTML: l.icon }),
+      h("div", {}, h("div", { class: "n" }, l.name), h("div", { class: "s" }, l.sub)));
+    if (l.side) a.addEventListener("click", e => {    // Claude opens in a window docked on the right
+      const w = Math.round(screen.availWidth * 0.38), hgt = screen.availHeight;
+      const left = (screen.availLeft || 0) + screen.availWidth - w, top = screen.availTop || 0;
+      const win = window.open(l.url, "claude", `popup=yes,width=${w},height=${hgt},left=${left},top=${top}`);
+      if (win) { e.preventDefault(); win.focus(); }
+    });
+    nav.append(a);
+  }
+}
+
+function renderToday() {
+  const k = todayKey(), d = new Date();
+  const list = (state.days[k] || []).filter(t => !t.movedTo);
+  const done = list.filter(t => t.done).length;
+  document.getElementById("todayName").textContent = DOW_LONG[d.getDay()];
+  document.getElementById("progText").textContent = list.length ? `${done} OF ${list.length} DONE` : "NOTHING PLANNED";
+  document.getElementById("progBar").style.width = list.length ? `${(done / list.length) * 100}%` : "0";
+  const box = document.getElementById("todayList"); box.replaceChildren();
+  if (!list.length) box.append(h("div", { class: "empty" }, "No tasks yet. Add one below or in the week tracker."));
+  for (const t of list) {
+    const span = h("div", { class: "t", title: "Double-click to edit" }, t.text);
+    span.addEventListener("dblclick", () => inlineEdit(span, t));
+    box.append(h("div", { class: "task" + (t.done ? " done" : "") },
+      h("button", { class: "cb" + (t.done ? " on" : ""), "aria-label": "Done", onclick: () => toggleTask(t.id) }, t.done ? "✓" : ""),
+      h("div", { class: "body" }, span, h("div", {}, tagLine(t, "span"))),
+      h("button", { class: "x", title: "Delete", "aria-label": "Delete", onclick: () => deleteTask(t.id) }, "×")));
+  }
+}
+
+let dragId = null;
+function renderWeek() {
+  const cols = document.getElementById("cols"); cols.replaceChildren();
+  const tk = todayKey();
+  for (const d of weekDays()) {
+    const k = keyOf(d);
+    const col = h("div", { class: "col" + (k < tk ? " past" : "") + (k === tk ? " today" : "") });
+    if (k === tk) col.append(h("div", { class: "now" }, "TODAY"));
+    col.append(h("div", { class: "dh" }, h("b", {}, DOW[d.getDay()]), h("span", {}, pad(d.getDate()))));
+    const wl = h("div", { class: "wlist" });
+    for (const t of state.days[k] || []) {
+      const ghost = !!t.movedTo;
+      const span = h("div", { class: "t" }, t.text);
+      if (!ghost) span.addEventListener("dblclick", () => inlineEdit(span, t));
+      const row = h("div", { class: "wt" + (t.done ? " done" : "") + (ghost ? " ghost" : ""), draggable: ghost ? "false" : "true" },
+        ghost ? h("div", { class: "cb", style: "opacity:.4" })
+              : h("button", { class: "cb" + (t.done ? " on" : ""), "aria-label": "Done", onclick: () => toggleTask(t.id) }, t.done ? "✓" : ""),
+        h("div", { class: "body" }, span, tagLine(t, "small")),
+        h("button", { class: "x", title: ghost ? "Remove marker" : "Delete", "aria-label": "Delete", onclick: () => deleteTask(t.id) }, "×"));
+      if (t.done) span.style.cssText = "color:var(--mut);text-decoration:line-through";
+      row.addEventListener("dragstart", e => { dragId = t.id; row.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; });
+      row.addEventListener("dragend", () => { dragId = null; row.classList.remove("dragging"); });
+      wl.append(row);
+    }
+    col.append(wl);
+    // add button -> input
+    const wadd = h("div", { class: "wadd" });
+    const showBtn = () => wadd.replaceChildren(h("button", { onclick: showInput }, "+ Add"));
+    function showInput() {
+      const inp = h("input", { placeholder: "Calc 3: homework" });
+      inp.addEventListener("keydown", e => {
+        if (e.key === "Enter" && inp.value.trim()) { addTask(k, inp.value); }
+        if (e.key === "Escape") showBtn();
+      });
+      inp.addEventListener("blur", () => { if (!inp.value.trim()) showBtn(); });
+      wadd.replaceChildren(inp); inp.focus();
+    }
+    showBtn(); col.append(wadd);
+    // drop target
+    col.addEventListener("dragover", e => { if (dragId) { e.preventDefault(); col.classList.add("over"); } });
+    col.addEventListener("dragleave", () => col.classList.remove("over"));
+    col.addEventListener("drop", e => { e.preventDefault(); col.classList.remove("over"); if (dragId) moveTask(dragId, k); });
+    cols.append(col);
+  }
+}
+
+/* ===================== CLOCK + RING ===================== */
+const NS = "http://www.w3.org/2000/svg", C = "#45e3ff";
+function sv(p, t, a) { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); p.appendChild(e); return e; }
+function arc(cx, cy, r, a0, a1) {
+  const pt = a => [cx + r * Math.cos((a - 90) * Math.PI / 180), cy + r * Math.sin((a - 90) * Math.PI / 180)];
+  const [x0, y0] = pt(a0), [x1, y1] = pt(a1);
+  return `M${x0} ${y0} A${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1} ${y1}`;
+}
+let dayArc, dayPct;
+function buildRing() {
+  const R = document.getElementById("ring"), cx = 85, cy = 85;
+  for (let i = 0; i < 60; i++) {
+    const t = (i * 6 - 90) * Math.PI / 180, l = i % 5 === 0, r0 = l ? 70 : 74;
+    sv(R, "line", { x1: cx + r0 * Math.cos(t), y1: cy + r0 * Math.sin(t), x2: cx + 80 * Math.cos(t), y2: cy + 80 * Math.sin(t),
+      stroke: C, "stroke-opacity": l ? ".9" : ".3", "stroke-width": l ? 2 : 1 });
+  }
+  sv(R, "path", { d: arc(cx, cy, 62, 0, 359.99), fill: "none", stroke: C, "stroke-opacity": ".12", "stroke-width": 6 });
+  dayArc = sv(R, "path", { fill: "none", stroke: C, "stroke-width": 6, style: "filter:drop-shadow(0 0 6px #45e3ff)" });
+  for (let i = 0; i < 3; i++) sv(R, "path", { d: arc(cx, cy, 47, i * 120 + 10, i * 120 + 110), fill: "none", stroke: C, "stroke-opacity": ".7", "stroke-width": 9 });
+  sv(R, "circle", { cx, cy, r: 34, fill: "rgba(69,227,255,.08)", stroke: C, "stroke-opacity": ".5" });
+  dayPct = sv(R, "text", { x: cx, y: cy + 5, "text-anchor": "middle", fill: C, "font-family": "JetBrains Mono, monospace", "font-size": "13" });
+  const lbl = sv(R, "text", { x: cx, y: cy + 20, "text-anchor": "middle", fill: "rgba(69,227,255,.55)", "font-family": "Inter", "font-size": "7.5", "letter-spacing": "1.5" });
+  lbl.textContent = "DAY";
+}
+let lastDay = todayKey();
+function tick() {
+  const d = new Date();
+  document.getElementById("time").innerHTML = `${d.getHours() % 12 || 12}:${pad(d.getMinutes())}<small>${d.getHours() < 12 ? "AM" : "PM"}</small>`;
+  document.getElementById("date").textContent = `${DOW_LONG[d.getDay()].toUpperCase()} · ${MON[d.getMonth()]} ${pad(d.getDate())}`;
+  const wk = weekDays(d), a = wk[0], b = wk[6];
+  document.getElementById("weekof").textContent = a.getMonth() === b.getMonth()
+    ? `WEEK OF ${MON[a.getMonth()]} ${a.getDate()} – ${b.getDate()}`
+    : `WEEK OF ${MON[a.getMonth()]} ${a.getDate()} – ${MON[b.getMonth()]} ${b.getDate()}`;
+  const frac = (d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) / 86400;
+  dayArc.setAttribute("d", arc(85, 85, 62, 0, Math.max(0.5, frac * 359.99)));
+  dayPct.textContent = `${Math.round(frac * 100)}%`;
+  if (todayKey() !== lastDay) { lastDay = todayKey(); carryOver(); render(); }   // midnight rollover
+}
+
+function render() { renderToday(); renderWeek(); }
+
+/* ===================== SETTINGS ===================== */
+const modal = document.getElementById("modal");
+function openSettings() {
+  document.getElementById("fToken").value = safeGet(LS.token) || "";
+  document.getElementById("fGist").value = safeGet(LS.gist) || "";
+  document.getElementById("fErr").textContent = "";
+  modal.classList.add("open");
+}
+document.getElementById("gear").onclick = openSettings;
+document.getElementById("fCancel").onclick = () => modal.classList.remove("open");
+document.getElementById("fClear").onclick = () => {
+  safeSet(LS.token, null); safeSet(LS.gist, null); modal.classList.remove("open");
+  setStatus("", "LOCAL ONLY · SET UP SYNC");
+};
+document.getElementById("fSave").onclick = async () => {
+  const token = document.getElementById("fToken").value.trim();
+  let gist = document.getElementById("fGist").value.trim();
+  gist = (gist.match(/[0-9a-f]{20,}/i) || [gist])[0];          // accept a full gist URL too
+  const err = document.getElementById("fErr");
+  if (!token || !gist) { err.textContent = "Enter both the token and the Gist ID."; return; }
+  safeSet(LS.token, token); safeSet(LS.gist, gist);
+  err.textContent = "Connecting…";
+  try {
+    const g = await gistFetch("GET");
+    if (!g.files || !g.files["hud.json"]) { err.textContent = "Connected, but that Gist has no hud.json file."; return; }
+    modal.classList.remove("open");
+    await pull(); carryOver();
+  } catch (e) { err.textContent = e.message; }
+};
+
+/* ===================== START ===================== */
+document.getElementById("todayAdd").addEventListener("keydown", e => {
+  if (e.key === "Enter" && e.target.value.trim()) { addTask(todayKey(), e.target.value); e.target.value = ""; }
+});
+buildRing(); renderLinks(); tick(); render();
+setInterval(tick, 1000);
+(async () => {
+  if (hasSync()) await pull(); else setStatus("", "LOCAL ONLY · SET UP SYNC");
+  carryOver();                                    // after pulling, so two devices don't both carry
+})();
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") pull(); });
+setInterval(() => { if (document.visibilityState === "visible") pull(); }, 5 * 60 * 1000);
+</script>
+</body>
+</html>
