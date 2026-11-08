@@ -87,6 +87,8 @@ a{color:inherit;text-decoration:none}
 .x{position:absolute;right:0;top:12px;color:var(--mut);font-size:18px;opacity:0;padding:2px 6px}
 .task:hover .x,.wt:hover .x{opacity:.8}
 .x:hover{color:var(--red)}
+.task.tagged{border-left:3px solid var(--tc);padding-left:14px}
+.task.done.tagged{border-left-color:color-mix(in srgb,var(--tc) 40%,transparent)}
 .addrow{margin-top:12px;display:flex;border:1px dashed var(--c3)}
 .addrow input{flex:1;background:transparent;border:0;outline:0;padding:13px 16px;font-size:15px}
 .addrow input::placeholder{color:var(--mut)}
@@ -123,6 +125,8 @@ a{color:inherit;text-decoration:none}
 .wt small{display:block;font:600 9.5px Inter;letter-spacing:.16em;color:var(--c2);margin-top:3px;text-transform:uppercase}
 .wt small.carry{color:var(--amber)}
 .wt .x{top:6px;font-size:14px;padding:0 2px}
+.wt.tagged{border-left:2px solid var(--tc);padding-left:8px}
+.wt.done.tagged{border-left-color:color-mix(in srgb,var(--tc) 40%,transparent)}
 .wt.ghost{opacity:.55;cursor:default}
 .wt.ghost .t{cursor:default}
 .wt.dragging{opacity:.3}
@@ -266,7 +270,44 @@ function safeSet(k, v) { try { v === null ? localStorage.removeItem(k) : localSt
 
 function normalize(s) {
   s = s && typeof s === "object" ? s : {};
-  return { updated: Number(s.updated) || 0, days: s.days && typeof s.days === "object" ? s.days : {} };
+  return {
+    updated: Number(s.updated) || 0,
+    days: s.days && typeof s.days === "object" ? s.days : {},
+    tags: s.tags && typeof s.tags === "object" ? s.tags : {},   // { "calc 3": 0, ... } -> index into TAG_COLORS
+  };
+}
+
+/* ===================== TAG COLORS ===================== */
+// New tags get these in order. Amber (carry-over) and red (delete) are left out on purpose.
+// Mixes bright, deep and muted shades so tags stay easy to tell apart.
+const TAG_COLORS = [
+  "#45e3ff", // 1 cyan
+  "#ffe14d", // 2 yellow
+  "#9b7bff", // 3 violet
+  "#4ade80", // 4 green
+  "#ff6ec7", // 5 pink
+  "#f8fafc", // 6 white
+  "#4f8dff", // 7 blue
+  "#a3e635", // 8 lime
+  "#8a9aa8", // 9 gray
+  "#14b8a6", // 10 teal
+];
+const tagKey = t => (t || "").trim().toLowerCase();       // "Calc 3" and "calc 3" are the same tag
+function assignTag(tag) {                                  // returns true if a new color was assigned
+  const k = tagKey(tag);
+  if (!k || k in state.tags) return false;
+  state.tags[k] = Object.keys(state.tags).length % TAG_COLORS.length;   // 11th tag wraps to color 1
+  return true;
+}
+function tagColor(tag) {
+  const k = tagKey(tag);
+  return k && k in state.tags ? TAG_COLORS[state.tags[k] % TAG_COLORS.length] : null;
+}
+function assignMissingTags() {                             // gives colors to tags that don't have one yet, oldest first
+  let changed = false;
+  for (const k of Object.keys(state.days).sort())
+    for (const t of state.days[k]) if (assignTag(t.tag)) changed = true;
+  return changed;
 }
 let state = normalize(JSON.parse(safeGet(LS.data) || "{}"));
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -287,6 +328,7 @@ function addTask(dayKey, raw) {
   const p = parseInput(raw);
   if (!p.text) return;
   (state.days[dayKey] ||= []).push({ id: uid(), text: p.text, tag: p.tag, done: false });
+  assignTag(p.tag);
   touch();
 }
 function findTask(id) {
@@ -301,7 +343,7 @@ function deleteTask(id) { const f = findTask(id); if (f) { f.list.splice(f.i, 1)
 function editTask(id, raw) {
   const f = findTask(id); if (!f) return;
   const p = parseInput(raw);
-  if (!p.text) { f.list.splice(f.i, 1); } else { f.task.text = p.text; f.task.tag = p.tag; }
+  if (!p.text) { f.list.splice(f.i, 1); } else { f.task.text = p.text; f.task.tag = p.tag; assignTag(p.tag); }
   touch();
 }
 function moveTask(id, toKey) {
@@ -327,6 +369,7 @@ function carryOver() {
   }
   const cutoff = keyOf(addDays(new Date(), -28));      // forget days older than 4 weeks
   for (const k of Object.keys(state.days)) if (k < cutoff) { delete state.days[k]; changed = true; }
+  if (assignMissingTags()) changed = true;               // older tasks get colors too
   if (changed) touch();
 }
 
@@ -407,7 +450,12 @@ function inlineEdit(span, task) {
 function tagLine(task, Small) {
   if (task.movedTo) return h(Small, { class: "carry" + (Small === "span" ? " tag" : "") }, `↺ MOVED TO ${shortLabel(task.movedTo)}`);
   const bits = [];
-  if (task.tag) bits.push(h(Small, { class: Small === "span" ? "tag" : "" }, task.tag));
+  if (task.tag) {
+    const col = tagColor(task.tag);
+    const el = h(Small, { class: Small === "span" ? "tag" : "" }, task.tag);
+    if (col) { el.style.color = col; if (Small === "span") el.style.borderColor = col + "66"; }
+    bits.push(el);
+  }
   if (task.carriedFrom) bits.push(h(Small, { class: "carry" + (Small === "span" ? " tag" : ""), style: Small === "span" ? "margin-left:6px" : "" }, `↺ FROM ${shortLabel(task.carriedFrom)}`));
   return bits;
 }
@@ -441,11 +489,16 @@ function renderToday() {
   for (const t of list) {
     const span = h("div", { class: "t", title: "Double-click to edit" }, t.text);
     span.addEventListener("dblclick", () => inlineEdit(span, t));
-    box.append(h("div", { class: "task" + (t.done ? " done" : "") },
+    box.append(withBar(h("div", { class: "task" + (t.done ? " done" : "") },
       h("button", { class: "cb" + (t.done ? " on" : ""), "aria-label": "Done", onclick: () => toggleTask(t.id) }, t.done ? "✓" : ""),
       h("div", { class: "body" }, span, h("div", {}, tagLine(t, "span"))),
-      h("button", { class: "x", title: "Delete", "aria-label": "Delete", onclick: () => deleteTask(t.id) }, "×")));
+      h("button", { class: "x", title: "Delete", "aria-label": "Delete", onclick: () => deleteTask(t.id) }, "×")), t));
   }
+}
+function withBar(row, task) {      // thin colored bar on the left, matching the task's tag
+  const col = !task.movedTo && tagColor(task.tag);
+  if (col) { row.classList.add("tagged"); row.style.setProperty("--tc", col); }
+  return row;
 }
 
 let dragId = null;
@@ -468,6 +521,7 @@ function renderWeek() {
         h("div", { class: "body" }, span, tagLine(t, "small")),
         h("button", { class: "x", title: ghost ? "Remove marker" : "Delete", "aria-label": "Delete", onclick: () => deleteTask(t.id) }, "×"));
       if (t.done) span.style.cssText = "color:var(--mut);text-decoration:line-through";
+      withBar(row, t);
       row.addEventListener("dragstart", e => { dragId = t.id; row.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; });
       row.addEventListener("dragend", () => { dragId = null; row.classList.remove("dragging"); });
       wl.append(row);
